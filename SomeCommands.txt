@@ -1,6 +1,6 @@
 
 -- Create an EKS Cluster
-eksctl create cluster --name eksctl-demo --nodes=2 --version=1.32 --instance-types=t2.medium --region=us-east-1
+eksctl create cluster --name eksctl-demo --nodes=2 --version=1.31 --instance-types=t2.medium --region=us-east-1
 
 -- Get my AWS ID
 aws sts get-caller-identity --query Account --output text
