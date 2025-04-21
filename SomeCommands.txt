@@ -1,0 +1,29 @@
+
+-- Create an EKS Cluster
+eksctl create cluster --name eksctl-demo --nodes=2 --version=1.32 --instance-types=t2.medium --region=us-east-1
+
+-- Get my AWS ID
+aws sts get-caller-identity --query Account --output text
+
+-- Create the IAM role needed 
+aws iam create-role --role-name UdacityFlaskDeployCBKubectlRole --assume-role-policy-document file://trust.json --output text --query 'Role.Arn'
+
+-- Once the IAM role is ready, I can attach the policy to this role
+aws iam put-role-policy --role-name UdacityFlaskDeployCBKubectlRole --policy-name eks-describe --policy-document file://iam-role-policy.json
+
+
+# Mac/Linux - The file will be created at `/System/Volumes/Data/private/tmp/aws-auth-patch.yml` path
+kubectl get -n kube-system configmap/aws-auth -o yaml > /tmp/aws-auth-patch.yml
+
++++++ A file will be downloaded, then I need to make modifications to that file - This is explained on 4.10 
+
+-- Once I make the modifications mentioned, I need to patch the file
+# Mac/Linux
+kubectl patch configmap/aws-auth -n kube-system --patch "$(cat /tmp/aws-auth-patch.yml)"
+
+==== Now at this stage I need to create a gitHub personal token so that the pipeline on AWS can monitor my git repository
+-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- This is the token I just generated
+
+
+
+
