@@ -14,25 +14,21 @@ phases:
 
       # Add GPG keys to avoid unsigned‑repo errors
       - echo "Adding Amazon Corretto GPG key"
-      - curl -fsSL https://apt.corretto.aws/corretto.key \
-        | apt-key add -
+      - curl -fsSL https://apt.corretto.aws/corretto.key | apt-key add -
       - echo "Adding Google Chrome GPG key"
-      - curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
-        | apt-key add -
+      - curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
 
       # Install jq
       - apt-get update
       - apt-get -y install jq
 
-      # aws-iam-authenticator download
-      - curl -sS -o aws-iam-authenticator \
-        https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator  # yamllint disable-line rule:line-length
+      # aws-iam-authenticator download (single line—yamllint disabled)
+      - curl -sS -o aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator  # yamllint disable-line rule:line-length
 
       # kubectl v1.31.0 for EKS 1.31
       - curl -LO https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl
       - curl -LO https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl.sha256  # yamllint disable-line rule:line-length
-      - echo "$(cat kubectl.sha256)  kubectl" \
-        | sha256sum --check
+      - echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
 
       # Make executables & update PATH
       - chmod +x ./kubectl ./aws-iam-authenticator
@@ -66,12 +62,9 @@ phases:
       - docker push ${IMAGE_URI}
       - echo "EKS_CLUSTER_NAME=${EKS_CLUSTER_NAME}"
       - echo "EKS_KUBECTL_ROLE_ARN=${EKS_KUBECTL_ROLE_ARN}"
-      - aws eks update-kubeconfig \
-          --name ${EKS_CLUSTER_NAME} \
-          --role-arn ${EKS_KUBECTL_ROLE_ARN}
+      - aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --role-arn ${EKS_KUBECTL_ROLE_ARN}
       - kubectl apply -f deployment.yml
-      - printf '[{"name":"eksctl-demo","imageUri":"%s"}]' \
-          ${IMAGE_URI} > build.json
+      - printf '[{"name":"eksctl-demo","imageUri":"%s"}]' ${IMAGE_URI} > build.json
 
 artifacts:
   files:
