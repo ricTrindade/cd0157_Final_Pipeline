@@ -113,56 +113,62 @@ Resources:
     DeletionPolicy: Retain
 
   CustomResourceLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          from botocore.vendored import requests
-          def handler(event, context):
-            response = {
-              'Status': 'SUCCESS',
-              "Reason": "See the details in CloudWatch Log Stream: " + context.log_stream_name,
-              'PhysicalResourceId': context.log_stream_name,
-              'StackId': event['StackId'],
-              'RequestId': event['RequestId'],
-              'LogicalResourceId': event['LogicalResourceId'],
-              'Data': {"Message": "Resource creation successful!"},
-            }
+  Type: AWS::Lambda::Function
+  Properties:
+    Code:
+      ZipFile: |
+        import json
+        import boto3
+        import urllib.request
 
-            client = boto3.client('iam')
-            try:
-              if event['RequestType'] == 'Create':
-                kubectl_role_name = event['ResourceProperties']['KubectlRoleName']
-                build_role_arn = event['ResourceProperties']['CodeBuildServiceRoleArn']
+        def handler(event, context):
+          response = {
+            'Status': 'SUCCESS',
+            "Reason": "See the details in CloudWatch Log Stream: " + context.log_stream_name,
+            'PhysicalResourceId': context.log_stream_name,
+            'StackId': event['StackId'],
+            'RequestId': event['RequestId'],
+            'LogicalResourceId': event['LogicalResourceId'],
+            'Data': {"Message": "Resource creation successful!"},
+          }
 
-                assume = client.get_role(RoleName = kubectl_role_name)
-                assume_doc = assume['Role']['AssumeRolePolicyDocument']
-                roles = [ { 'Effect': 'Allow', 'Principal': { 'AWS': build_role_arn }, 'Action': 'sts:AssumeRole' } ]
+          client = boto3.client('iam')
+          try:
+            if event['RequestType'] == 'Create':
+              kubectl_role_name = event['ResourceProperties']['KubectlRoleName']
+              build_role_arn = event['ResourceProperties']['CodeBuildServiceRoleArn']
 
-                for statement in assume_doc['Statement']:
-                  if 'AWS' in statement['Principal']:
-                    if statement['Principal']['AWS'].startswith('arn:aws:iam:'):
-                      roles.append(statement)
+              assume = client.get_role(RoleName=kubectl_role_name)
+              assume_doc = assume['Role']['AssumeRolePolicyDocument']
+              roles = [{
+                'Effect': 'Allow',
+                'Principal': { 'AWS': build_role_arn },
+                'Action': 'sts:AssumeRole'
+              }]
 
-                assume_doc['Statement'] = roles
-                update_response = client.update_assume_role_policy(RoleName = kubectl_role_name, PolicyDocument = json.dumps(assume_doc))
-            except Exception as e:
-              print(e)
-              response['Status'] = 'FAILED'
-              response["Reason"] = e
-              response['Data'] = {"Message": "Resource creation failed"}
+              for statement in assume_doc['Statement']:
+                if 'AWS' in statement['Principal']:
+                  if statement['Principal']['AWS'].startswith('arn:aws:iam:'):
+                    roles.append(statement)
 
-            response_body = json.dumps(response)
-            headers = {'content-type': '', "content-length": str(len(response_body)) }
-            put_response = requests.put(event['ResponseURL'], headers=headers, data=response_body)
-            return response
+              assume_doc['Statement'] = roles
+              client.update_assume_role_policy(RoleName=kubectl_role_name, PolicyDocument=json.dumps(assume_doc))
 
-      Handler: index.handler
-      Role: !GetAtt CustomResourceLambdaExecutionRole.Arn
-      Runtime: python3.9
-      Timeout: 300
+          except Exception as e:
+            print(e)
+            response['Status'] = 'FAILED'
+            response["Reason"] = str(e)
+            response['Data'] = {"Message": "Resource creation failed"}
+
+          response_body = json.dumps(response)
+          req = urllib.request.Request(event['ResponseURL'], data=response_body.encode(), headers={"content-type": "", "content-length": str(len(response_body))}, method='PUT')
+          with urllib.request.urlopen(req) as put_response:
+              print(f"Response status: {put_response.status}")
+          return response
+    Handler: index.handler
+    Role: !GetAtt CustomResourceLambdaExecutionRole.Arn
+    Runtime: python3.9
+    Timeout: 300
 
   CustomResourceLambdaExecutionRole:
     Type: AWS::IAM::Role
