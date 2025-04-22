@@ -36,7 +36,7 @@ phases:
       - echo 'export PATH=$PWD:$PATH' >> $HOME/.bashrc
 
       # Smoke tests
-      - kubectl version --short --client
+      - kubectl version --client
       - aws-iam-authenticator help
 
   pre_build:
