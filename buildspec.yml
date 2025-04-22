@@ -1,3 +1,4 @@
+---
 version: 0.2
 
 phases:
@@ -5,62 +6,72 @@ phases:
     runtime-versions:
       python: 3.9
     commands:
-      - echo "Starting install phase..."
+      - echo "=== install phase ==="
       - python --version
 
-      # Upgrade pip and install AWS CLI
+      # Upgrade pip and awscli
       - pip install --upgrade pip awscli
 
-      # Fix GPG errors (Corretto & Google Chrome repos)
-      - echo "Adding Corretto GPG key..."
-      - curl -fsSL https://apt.corretto.aws/corretto.key | apt-key add -
-      - echo "Adding Google Chrome GPG key..."
-      - curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+      # Add GPG keys to avoid unsigned‑repo errors
+      - echo "Adding Amazon Corretto GPG key"
+      - curl -fsSL https://apt.corretto.aws/corretto.key \
+        | apt-key add -
+      - echo "Adding Google Chrome GPG key"
+      - curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
+        | apt-key add -
 
-      # Now update and install jq
+      # Install jq
       - apt-get update
       - apt-get -y install jq
 
-      # Download aws-iam-authenticator
-      - curl -sS -o aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator
+      # aws-iam-authenticator download
+      - curl -sS -o aws-iam-authenticator \
+        https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator  # yamllint disable-line rule:line-length
 
-      # Download and install kubectl v1.31.0 (compatible with your EKS 1.31 cluster)
+      # kubectl v1.31.0 for EKS 1.31
       - curl -LO https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl
-      - curl -LO https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl.sha256
-      - echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+      - curl -LO https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl.sha256  # yamllint disable-line rule:line-length
+      - echo "$(cat kubectl.sha256)  kubectl" \
+        | sha256sum --check
 
-      # Make them executable and add to PATH
+      # Make executables & update PATH
       - chmod +x ./kubectl ./aws-iam-authenticator
-      - export PATH=$PWD/:$PATH
-      - echo 'export PATH=$PWD/:$PATH' >> $HOME/.bashrc
+      - export PATH=$PWD:$PATH
+      - echo 'export PATH=$PWD:$PATH' >> $HOME/.bashrc
 
-      # Verify
+      # Smoke tests
       - kubectl version --short --client
       - aws-iam-authenticator help
 
   pre_build:
     commands:
-      - echo "Starting pre_build phase..."
-      - TAG="$REPOSITORY_NAME.$REPOSITORY_BRANCH.$ENVIRONMENT_NAME.$(date +%Y-%m-%d.%H.%M.%S).$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
-      - sed -i 's@CONTAINER_IMAGE@'"$REPOSITORY_URI:$TAG"'@' deployment.yml
+      - echo "=== pre_build phase ==="
+      - DATE=$(date +%Y-%m-%d.%H.%M.%S)
+      - SHORT_SHA=${CODEBUILD_RESOLVED_SOURCE_VERSION:0:8}
+      - TAG="${REPOSITORY_NAME}.${REPOSITORY_BRANCH}.${ENVIRONMENT_NAME}.${DATE}.${SHORT_SHA}"
+      - IMAGE_URI="${REPOSITORY_URI}:${TAG}"
+      - sed -i "s@CONTAINER_IMAGE@${IMAGE_URI}@g" deployment.yml
       - $(aws ecr get-login --no-include-email)
       - export KUBECONFIG=$HOME/.kube/config
-      - ls -l
+      - ls -al $PWD
 
   build:
     commands:
-      - echo "Starting build phase..."
-      - docker build --tag $REPOSITORY_URI:$TAG .
+      - echo "=== build phase ==="
+      - docker build -t ${IMAGE_URI} .
 
   post_build:
     commands:
-      - echo "Starting post_build phase..."
-      - docker push $REPOSITORY_URI:$TAG
-      - echo "EKS_CLUSTER_NAME: $EKS_CLUSTER_NAME"
-      - echo "EKS_KUBECTL_ROLE_ARN: $EKS_KUBECTL_ROLE_ARN"
-      - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --role-arn $EKS_CLUSTER_KUBECTL_ROLE_ARN
+      - echo "=== post_build phase ==="
+      - docker push ${IMAGE_URI}
+      - echo "EKS_CLUSTER_NAME=${EKS_CLUSTER_NAME}"
+      - echo "EKS_KUBECTL_ROLE_ARN=${EKS_KUBECTL_ROLE_ARN}"
+      - aws eks update-kubeconfig \
+          --name ${EKS_CLUSTER_NAME} \
+          --role-arn ${EKS_KUBECTL_ROLE_ARN}
       - kubectl apply -f deployment.yml
-      - printf '[{"name":"eksctl-demo","imageUri":"%s"}]' $REPOSITORY_URI:$TAG > build.json
+      - printf '[{"name":"eksctl-demo","imageUri":"%s"}]' \
+          ${IMAGE_URI} > build.json
 
 artifacts:
   files:
