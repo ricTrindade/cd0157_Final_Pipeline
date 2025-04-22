@@ -8,34 +8,20 @@ phases:
     commands:
       - echo "=== install phase ==="
       - python --version
-
-      # Upgrade pip and awscli
       - pip install --upgrade pip awscli
-
-      # Add GPG keys to avoid unsigned‑repo errors
       - echo "Adding Amazon Corretto GPG key"
       - curl -fsSL https://apt.corretto.aws/corretto.key | apt-key add -
       - echo "Adding Google Chrome GPG key"
       - curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
-
-      # Install jq
       - apt-get update
       - apt-get -y install jq
-
-      # aws-iam-authenticator download (single line—yamllint disabled)
       - curl -sS -o aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator  # yamllint disable-line rule:line-length
-
-      # kubectl v1.31.0 for EKS 1.31
       - curl -LO https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl
       - curl -LO https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl.sha256  # yamllint disable-line rule:line-length
       - echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
-
-      # Make executables & update PATH
       - chmod +x ./kubectl ./aws-iam-authenticator
       - export PATH=$PWD:$PATH
       - echo 'export PATH=$PWD:$PATH' >> $HOME/.bashrc
-
-      # Smoke tests
       - kubectl version --client
       - aws-iam-authenticator help
 
@@ -43,11 +29,11 @@ phases:
     commands:
       - echo "=== pre_build phase ==="
       - DATE=$(date +%Y-%m-%d.%H.%M.%S)
-      - SHORT_SHA=${CODEBUILD_RESOLVED_SOURCE_VERSION:0:8}
+      - SHORT_SHA=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-8)
       - TAG="${REPOSITORY_NAME}.${REPOSITORY_BRANCH}.${ENVIRONMENT_NAME}.${DATE}.${SHORT_SHA}"
       - IMAGE_URI="${REPOSITORY_URI}:${TAG}"
       - sed -i "s@CONTAINER_IMAGE@${IMAGE_URI}@g" deployment.yml
-      - $(aws ecr get-login --no-include-email)
+      - eval $(aws ecr get-login --no-include-email)
       - export KUBECONFIG=$HOME/.kube/config
       - ls -al $PWD
 
